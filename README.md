@@ -23,13 +23,24 @@ This repo contains an exercise intended for Back-End Engineers.
 
 3. Open a terminal window and run the following commands
     ```
-    cd <project root - location where you clones the repo> 
+    cd <full path project root - location where you clones the repo> 
+    
+    mkdir -p /Users/<your user folder>/csvtojson/input
+    mkdir -p /Users/<your user folder>/csvtojson/output
+    mkdir -p /Users/<your user folder>/csvtojson/error
+    
     ./csvToJson.sh -i <full path to input dir> -e <full path to error dir> -o <full path to output dir>
     ```
    
-   - Application should start successfully
+   - Application should start successfully - look for this message in the logs:
+   ``` 
+   "polling inputPath for events"
+   ```
     
-   - Copy a csv file to the input directory and monitor the output logs for processing status
+   - Copy a csv file to the input directory and monitor the output logs for processing status - - look for this message in the logs:
+   ``` 
+   "processing new csv file on thread, filename...."
+   ```
    
 ## Assumptions
 
@@ -55,6 +66,7 @@ Current working assumptions to be able to make progress:
 16. Logging to std out is ok
 17. No dev norms for the repo - commit templates, code style, coverage, etc….
 18. Input location exist prior to running
+19. Users have backups of their source files
 
 
 
