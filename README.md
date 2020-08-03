@@ -47,5 +47,14 @@ Current working assumptions to be able to make progress:
 10. Users will copy files in and they will be small enough to compete in a single FS event cycle
 11. Users will not edit or otherwise manage files in the input folder
 12. Users will not edit or other manage files in the output folder
+13. Parallel file processing is needed
+14. Security considerations will be discussed later
+     - Files contain PII, logs also
+      - Moving of files possible over network
+15. files could be big enough to warrant a complex row by row processing approach
+16. Logging to std out is ok
+17. No dev norms for the repo - commit templates, code style, coverage, etc….
+18. Input location exist prior to running
+
 
 
