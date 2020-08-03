@@ -1,0 +1,17 @@
+INTERNAL_ID,FIRST_NAME,MIDDLE_NAME,LAST_NAME,PHONE_NUM
+123456770,first_name_7,middle_name_7,last_name_7,555-555-5557
+1234567A,first_name_7,middle_name_7,last_name_7,555-555-5557
+-1234567,first_name_7,middle_name_7,last_name_7,555-555-5557
++1234567,first_name_7,middle_name_7,last_name_7,555-555-5557
+12345677,first_name_7_aaaaaaa,middle_name_7,last_name_7,555-555-5557
+12345677,first_name_7,middle_name_7_aaaaaaa,last_name_7,555-555-5557
+12345677,first_name_7,middle_name_7,last_name_7_aaaaaaa,555-555-5557
+12345677,first_name_7,middle_name_7,last_name_7,55-555-5555
+12345677,first_name_7,middle_name_7,last_name_7,555-55-5555
+12345677,first_name_7,middle_name_7,last_name_7,555-555-555
+12345677,first_name_7,middle_name_7,last_name_7,5555-555-5557
+12345677,first_name_7,middle_name_7,last_name_7,555-5555-5557
+12345677,first_name_7,middle_name_7,last_name_7,555-555-55575
+12345677,first_name_7,middle_name_7,last_name_7,aaa-555-5557
+12345677,first_name_7,middle_name_7,last_name_7,555-aaa-5557
+12345677,first_name_7,middle_name_7,last_name_7,555-555-aaaa

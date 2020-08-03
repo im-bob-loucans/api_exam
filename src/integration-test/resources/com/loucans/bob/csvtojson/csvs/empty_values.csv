@@ -1,0 +1,6 @@
+INTERNAL_ID,FIRST_NAME,MIDDLE_NAME,LAST_NAME,PHONE_NUM
+,first_name_0,middle_name_0,last_name_0,555-555-5550
+12345671,,middle_name_1,last_name_1,555-555-5551
+12345672,first_name_2,,last_name_2,555-555-5552
+12345673,first_name_3,middle_name_3,,555-555-5553
+12345674,first_name_4,middle_name_4,last_name_4,
