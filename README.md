@@ -14,22 +14,38 @@ This repo contains an exercise intended for Back-End Engineers.
 1. This exercise is meant to showcase how you work. With consideration to the time limit, do your best to treat it like a production system.
 
 ## How-To
-1. Install a JRE:  
-   - Download the OpenJDK 13 JRE Runtime and install: https://adoptopenjdk.net/
+- NOTE: These instructions are for Mac only 
 
-2. Clone a local copy of the repo
+1. Install a JRE:  
+   - Download the OpenJDK 13 JRE and install: https://adoptopenjdk.net/ - you will most likely need admin privileges to do this - check with your IT team.
+
+2. Clone a local copy of the repo - follow GitHub instructions for setting up a client
 
 3. Open a terminal window and run the following commands
     ```
-    cd <project root>
+    cd <project root - location where you clones the repo> 
     ./csvToJson.sh -i <full path to input dir> -e <full path to error dir> -o <full path to output dir>
     ```
    
-   application will start,  add a csv file to the input directory and monitor the logs for processing
+   - Application should start successfully
+    
+   - Copy a csv file to the input directory and monitor the output logs for processing status
    
 ## Assumptions
+
+Current working assumptions to be able to make progress:
+
 1. Input files are UTF-8 encoded
 2. Input files conform to CSV RFC4180 Standard for quoted values
 3. Input files use only comma delimiters
-3. All columns are provided in specified order in the CSV...
+4. All columns are provided in the order specified in the requirements
+5. A command line tool is what the user wants
+6. Java is an acceptable technology
+7. Installing a JRE is something users will be capable of doing
+8. MacOS is the target platform 
+9. Using a dist folder with a committed binary is fine for distribution
+10. Users will copy files in and they will be small enough to compete in a single FS event cycle
+11. Users will not edit or otherwise manage files in the input folder
+12. Users will not edit or other manage files in the output folder
+
 
