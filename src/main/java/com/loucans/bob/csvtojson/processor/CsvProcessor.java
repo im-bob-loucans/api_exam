@@ -36,6 +36,8 @@ import static org.apache.commons.lang3.StringUtils.isNotEmpty;
 // - --------------------------------------------------
 public class CsvProcessor {
     private static final Logger LOGGER = LoggerFactory.getLogger(CsvProcessor.class);
+    private boolean headerValid = false;
+    private int rowsProcessed = 0;
 
     // - --------------------------------------------------
     // - define the metadata about the expected input csv
@@ -101,9 +103,7 @@ public class CsvProcessor {
                 Paths.get(outputPath + "/" + csvFileName.replace(".csv", ".json"));
         try {
             Files.deleteIfExists(outputFile);
-            outputFile = Files.createFile(outputFile);
-            Files.writeString(
-                    outputFile, "[" + lineSeparator(), UTF_8, APPEND);
+            Files.createFile(outputFile);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -120,53 +120,63 @@ public class CsvProcessor {
                 Paths.get(errorPath + "/" + csvFileName.replace(".csv", "errors.csv"));
         try {
             Files.deleteIfExists(errorFile);
-            errorFile = Files.createFile(errorFile);
-            Files.writeString(errorFile, "LINE_NUM,ERROR_MSG" + lineSeparator(), UTF_8);
+            Files.createFile(errorFile);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
-        processCsvFile(csvFile, outputFile, errorFile);
+        processCsvFile(csvFile,
+                (rowJson) -> {
+                    try {
+                        Files.writeString(outputFile, rowJson, UTF_8, APPEND);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                (errorMessage) -> {
+                    try {
+                        Files.writeString(errorFile, errorMessage, UTF_8, APPEND);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
     }
 
     public void processCsvFile(File csvFile,
-                               Path outputFile,
-                               Path errorFile) {
+                               OutputWriter outputFile,
+                               ErrorLogger erroLogger) {
 
-        List<String> jsonRows = new ArrayList<>();
+        List<String> jsonRow = new ArrayList<>();
         CsvRowCallbackHandler rowHandler = (rowNum, csvRow) -> {
             if (isHeaderRow(rowNum)) {
                 assertValidHeaderRow(csvRow);
+                headerValid = true;
             } else {
                 assertValidDataRow(csvRow);
-            }
-
-            if (jsonRows.size() > 0 && StringUtils.isNotEmpty(jsonRows.get(0))) {
-                try {
-                    Files.writeString(
-                            outputFile, jsonRows.get(0) + "," + lineSeparator(), UTF_8, APPEND);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
+                if (rowsProcessed == 0) {
+                    outputFile.writeString("[" + lineSeparator());
                 }
-                jsonRows.clear();
-            }
 
-            String json = rowtoJson(csvRow);
-            jsonRows.add(json);
-            LOGGER.debug("processed csvRow to json: [{}]", json);
+                if (jsonRow.size() > 0 && StringUtils.isNotEmpty(jsonRow.get(0))) {
+                    outputFile.writeString(jsonRow.get(0) + "," + lineSeparator());
+                    jsonRow.clear();
+                }
+
+                String json = rowtoJson(csvRow);
+                jsonRow.add(json);
+                rowsProcessed++;
+
+                LOGGER.debug("processed csvRow to json: [{}]", json);
+            }
         };
 
+        erroLogger.logError("LINE_NUM,ERROR_MSG" + lineSeparator());
         CsvRowCallbackErrorHandler errorHandler = (rowNum, error) -> {
             String message = format(
                     "csv row failed: value: [%s], error: [%s]", error.getValue(), error.getMessage());
 
-            try {
-                Files.writeString(
-                        errorFile,
-                        format("\"%d\",\"%s\"", rowNum, message.replace("\"", "\"\"")) + lineSeparator(), UTF_8, APPEND);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            erroLogger.logError(
+                    format("\"%d\",\"%s\"", rowNum, message.replace("\"", "\"\"")) + lineSeparator());
 
             LOGGER.error(message);
 
@@ -182,14 +192,20 @@ public class CsvProcessor {
         new CommonsCsvParser()
                 .parse(csvFile, rowHandler, errorHandler);
 
-        if (jsonRows.size() > 0 && StringUtils.isNotEmpty(jsonRows.get(0))) {
-            try {
-                Files.writeString(
-                        outputFile, jsonRows.get(0) + lineSeparator() + "]", UTF_8, APPEND);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            jsonRows.clear();
+        if (headerValid == false) {
+            erroLogger.logError(
+                    format("\"%d\",\"empty file\"", 0));
+        }
+
+        if (jsonRow.size() > 0 && StringUtils.isNotEmpty(jsonRow.get(0))) {
+            outputFile.writeString(jsonRow.get(0) + lineSeparator());
+            jsonRow.clear();
+        }
+
+        if (rowsProcessed > 0) {
+            outputFile.writeString("]");
+        } else {
+            outputFile.writeString("[]");
         }
 
         csvFile.delete();
@@ -237,7 +253,7 @@ public class CsvProcessor {
         name.put("last", data[3]);
 
         JSONObject jso = new JSONObject();
-        jso.put("id", data[0]);
+        jso.put("id", Long.valueOf(data[0]));
         jso.put("name", name);
         jso.put("phone", data[4]);
 
