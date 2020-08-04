@@ -67,6 +67,7 @@ Current working assumptions to be able to make progress:
 17. No dev norms for the repo - commit templates, code style, coverage, etc….
 18. Input location exist prior to running
 19. Users have backups of their source files
+20. Users will enter different locations - error and input folders cause a loop
 
 
 
