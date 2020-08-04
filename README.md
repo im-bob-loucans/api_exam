@@ -17,7 +17,7 @@ This repo contains an exercise intended for Back-End Engineers.
 - NOTE: These instructions are for Mac only 
 
 1. Install a JRE:  
-   - Download the OpenJDK 13 JRE and install: https://adoptopenjdk.net/ - you will most likely need admin privileges to do this - check with your IT team.
+   - Download the OpenJDK JRE (11 or better) and install: https://adoptopenjdk.net/ - you will most likely need admin privileges to do this - check with your IT team.
 
 2. Clone a local copy of the repo - follow GitHub instructions for setting up a client
 
