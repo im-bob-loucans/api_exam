@@ -1,5 +1,7 @@
 package com.loucans.bob.csvtojson.processor;
 
-public interface ErrorLogger {
+import java.io.Closeable;
+
+public interface ErrorLogger extends Closeable {
     void logError(Integer rowNum, String errorToLog);
 }

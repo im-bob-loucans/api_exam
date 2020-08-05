@@ -4,29 +4,20 @@ import com.loucans.bob.csvtojson.exception.InvalidDataRowException;
 import com.loucans.bob.csvtojson.exception.InvalidDataValueException;
 import com.loucans.bob.csvtojson.model.CsvRow;
 import com.loucans.bob.csvtojson.parser.CommonsCsvParser;
+import com.loucans.bob.csvtojson.parser.CsvParser;
 import com.loucans.bob.csvtojson.parser.CsvRowCallbackErrorHandler;
 import com.loucans.bob.csvtojson.parser.CsvRowCallbackHandler;
 import org.apache.commons.lang3.StringUtils;
-import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import static java.lang.String.format;
-import static java.lang.System.lineSeparator;
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.nio.file.StandardOpenOption.APPEND;
 import static java.util.Objects.isNull;
-import static org.apache.commons.lang3.StringUtils.isEmpty;
-import static org.apache.commons.lang3.StringUtils.isNotEmpty;
+import static org.apache.commons.lang3.StringUtils.*;
 
 // - --------------------------------------------------
 // - main logic for processing a file per requirements
@@ -36,195 +27,60 @@ import static org.apache.commons.lang3.StringUtils.isNotEmpty;
 // - --------------------------------------------------
 public class CsvProcessor {
     private static final Logger LOGGER = LoggerFactory.getLogger(CsvProcessor.class);
-    private boolean headerValid = false;
-    private int rowsProcessed = 0;
-
-    // - --------------------------------------------------
-    // - define the metadata about the expected input csv
-    // - --------------------------------------------------
-    // FLUP - refactor this
-    private enum Fields {
-        INTERNAL_ID(
-                (value) -> {
-                    if (isEmpty(value) || !value.matches("\\d{8}")) {
-                        throw new InvalidDataValueException(
-                                "invalid INTERNAL_ID [required, length <= 8, digits only]", value);
-                    }
-                }),
-
-        FIRST_NAME(
-                (value) -> {
-                    if (isEmpty(value) || value.length() > 15) {
-                        throw new InvalidDataValueException(
-                                "invalid FIRST_NAME [required, length <= 15]", value);
-                    }
-                }),
-
-        MIDDLE_NAME(
-                (value) -> {
-                    if (!isEmpty(value) && value.length() > 15) {
-                        throw new InvalidDataValueException(
-                                "invalid MIDDLE_NAME [length <= 15]", value);
-                    }
-                }),
-
-        LAST_NAME(
-                (value) -> {
-                    if (isEmpty(value) || value.length() > 15) {
-                        throw new InvalidDataValueException(
-                                "invalid LAST_NAME [required, length <= 15]", value);
-                    }
-                }),
-
-        PHONE_NUM(
-                (value) -> {
-                    if (isEmpty(value) || !(value.length() == 12) || !value.matches("\\d{3}-\\d{3}-\\d{4}")) {
-                        throw new InvalidDataValueException(
-                                "invalid PHONE_NUM [required, length = 12, format: ###-###-####]", value);
-                    }
-                });
-
-        public final Consumer<String> validator;
-
-        Fields(Consumer<String> validator) {
-            this.validator = validator;
-        }
-    }
 
     public void processCsvFile(String csvFileName,
                                String inputPath,
                                String outputPath,
                                String errorPath) {
+        try (CsvParser parser =
+                     new CommonsCsvParser(inputPath + "/" + csvFileName);
+             OutputWriter outputWriter =
+                     new JsonOutputWriter(outputPath + "/" + substring(csvFileName, 0, lastIndexOf(csvFileName, ".")) + ".json");
+             ErrorLogger errorLogger =
+                     new CsvErrorLogger(errorPath + "/" + csvFileName)) {
 
-        File csvFile =
-                new File(inputPath + "/" + csvFileName);
+            AtomicInteger rowsProcessed = new AtomicInteger(0);
 
-        Path outputFile =
-                Paths.get(
-                        outputPath + "/" + StringUtils.stripEnd(csvFileName, ".csv") + ".json");
-        try {
-            Files.deleteIfExists(outputFile);
+            CsvRowCallbackHandler rowHandler = (rowNum, csvRow) -> {
+                if (isHeaderRow(rowNum)) {
+                    assertValidHeaderRow(csvRow);
+                    rowsProcessed.incrementAndGet();
+                } else {
+                    assertValidDataRow(csvRow);
+                    outputWriter.writeRecord(csvRow);
+                    LOGGER.debug("processed row: [{}]", csvRow);
+                    rowsProcessed.incrementAndGet();
+                }
+            };
+
+            CsvRowCallbackErrorHandler errorHandler = (rowNum, error) -> {
+                LOGGER.error(
+                        "row failed, value: [{}], error: [{}]", error.getValue(), error.getMessage());
+                errorLogger.logError(
+                        rowNum, error.getMessage().replace("\"", "\"\""));
+                if (isHeaderRow(rowNum)) {
+                    // abort for processing errors on header row
+                    throw error;
+                }
+            };
+
+            parser.parse(rowHandler, errorHandler);
+
+            if (rowsProcessed.intValue() == 0) {
+                errorLogger.logError(0, "\"empty file\"");
+            } else if (rowsProcessed.intValue() == 1) {
+                outputWriter.writeRecord(null);
+            }
+
         } catch (IOException e) {
             throw new RuntimeException(e);
-        }
-
-        // Error records should be written to a csv file in error-directory
-        // the error file should match the name of the input file.
-        // FLUP - if errors exist, one error file is created per input file. - need to create only when an error occurs
-        // - an error record should contain:
-        //   - LINE_NUM : the number of the record which was invalid
-        //   - ERROR_MSG : a human readable error message about what validation failed
-        // FLUP - in the event of name collision, the latest file should overwrite the earlier version.
-        //   - collect errors
-        Path errorFile =
-                Paths.get(errorPath + "/" + csvFileName);
-        try {
-            Files.deleteIfExists(errorFile);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        processCsvFile(csvFile,
-                new OutputWriter() {
-                    private boolean fileCreated = false;
-
-                    @Override
-                    public void writeString(String rowJson) {
-                        try {
-                            if (!fileCreated) {
-                                Files.createFile(outputFile);
-                                fileCreated = true;
-                            }
-                            Files.writeString(outputFile, rowJson, UTF_8, APPEND);
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                },
-                new ErrorLogger() {
-                    private boolean fileCreated = false;
-
-                    @Override
-                    public void logError(Integer rowNum, String errorMessage) {
-                        try {
-                            if (!fileCreated) {
-                                Files.createFile(errorFile);
-                                Files.writeString(
-                                        errorFile, "\"LINE_NUM\",\"ERROR_MSG\"\r\n", UTF_8, APPEND);
-                                fileCreated = true;
-                            }
-                            Files.writeString(errorFile, format("\"%d\",\"%s\"\r\n", rowNum, errorMessage), UTF_8, APPEND);
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                });
-    }
-
-    public void processCsvFile(File csvFile,
-                               OutputWriter outputFile,
-                               ErrorLogger erroLogger) {
-
-        List<String> jsonRow = new ArrayList<>();
-        CsvRowCallbackHandler rowHandler = (rowNum, csvRow) -> {
-            if (isHeaderRow(rowNum)) {
-                assertValidHeaderRow(csvRow);
-                headerValid = true;
-            } else {
-                assertValidDataRow(csvRow);
-                if (rowsProcessed == 0) {
-                    outputFile.writeString("[" + lineSeparator());
-                }
-
-                if (jsonRow.size() > 0 && StringUtils.isNotEmpty(jsonRow.get(0))) {
-                    outputFile.writeString(jsonRow.get(0) + "," + lineSeparator());
-                    jsonRow.clear();
-                }
-
-                String json = rowtoJson(csvRow);
-                jsonRow.add(json);
-                rowsProcessed++;
-
-                LOGGER.debug("processed csvRow to json: [{}]", json);
+        } finally {
+            try {
+                Files.delete(Paths.get(inputPath + "/" + csvFileName));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-        };
-
-        CsvRowCallbackErrorHandler errorHandler = (rowNum, error) -> {
-            String message = format(
-                    "csv row failed: value: [%s], error: [%s]", error.getValue(), error.getMessage());
-            LOGGER.error(message);
-
-            erroLogger.logError(
-                    rowNum, error.getMessage().replace("\"", "\"\""));
-
-            // FLUP - processing should continue in the event of an invalid row;
-            //         all errors should be collected and added to the corresponding error csv.
-            //         should this stop processing?
-            if (isHeaderRow(rowNum)) {
-                // abort for processing errors on header row
-                throw error;
-            }
-        };
-
-        new CommonsCsvParser()
-                .parse(csvFile, rowHandler, errorHandler);
-
-        if (headerValid == false) {
-            erroLogger.logError(0, "\"empty file\"");
         }
-
-        if (jsonRow.size() > 0 && StringUtils.isNotEmpty(jsonRow.get(0))) {
-            outputFile.writeString(jsonRow.get(0) + lineSeparator());
-            jsonRow.clear();
-        }
-
-        if (rowsProcessed > 0) {
-            outputFile.writeString("]");
-        } else if (rowsProcessed == 0 && headerValid) {
-            outputFile.writeString("[]");
-        }
-
-        csvFile.delete();
     }
 
     private boolean isHeaderRow(Integer rowNum) {
@@ -232,14 +88,14 @@ public class CsvProcessor {
     }
 
     private void assertValidHeaderRow(CsvRow csvRow) {
-        if (isNull(csvRow) || isNull(csvRow.getRowData()) ||
-                Fields.values().length != csvRow.getRowData().length) {
+        if (isNull(csvRow) || isNull(csvRow.getRowData()) || csvRow.getRowData().length != 5) {
             throw new InvalidDataRowException(
                     "csv header row is null or does not match expected header definition", csvRow);
         }
 
-        for (int i = 0; i < Fields.values().length; i++) {
-            if (!StringUtils.equals(Fields.values()[i].name(), csvRow.getRowData()[i])) {
+        String[] headers = {"INTERNAL_ID", "FIRST_NAME", "MIDDLE_NAME", "LAST_NAME", "PHONE_NUM"};
+        for (int i = 0; i < headers.length; i++) {
+            if (!headers[i].equals(csvRow.getRowData()[i])) {
                 throw new InvalidDataRowException(
                         "csv header row is null or does not match expected header definition", csvRow);
             }
@@ -247,32 +103,35 @@ public class CsvProcessor {
     }
 
     private void assertValidDataRow(CsvRow csvRow) {
-        if (isNull(csvRow) || isNull(csvRow.getRowData()) ||
-                Fields.values().length != csvRow.getRowData().length) {
+        if (isNull(csvRow) || isNull(csvRow.getRowData()) || csvRow.getRowData().length != 5) {
             throw new InvalidDataRowException(
                     "csv data row is null or does not match expected header definition", csvRow);
         }
 
-        for (int i = 0; i < Fields.values().length; i++) {
-            Fields.values()[i].validator.accept((csvRow.getRowData()[i]));
-        }
-    }
-
-    private String rowtoJson(CsvRow csvRow) {
         String[] data = csvRow.getRowData();
-
-        JSONObject name = new JSONObject();
-        name.put("first", data[1]);
-        if (isNotEmpty(data[2])) {
-            name.put("middle", data[2]);
+        if (isEmpty(data[0]) || !data[0].matches("\\d{8}")) {
+            throw new InvalidDataValueException(
+                    "invalid INTERNAL_ID [required, length <= 8, digits only]", data[0]);
         }
-        name.put("last", data[3]);
 
-        JSONObject jso = new JSONObject();
-        jso.put("id", Long.valueOf(data[0]));
-        jso.put("name", name);
-        jso.put("phone", data[4]);
+        if (isEmpty(data[1]) || data[1].length() > 15) {
+            throw new InvalidDataValueException(
+                    "invalid FIRST_NAME [required, length <= 15]", data[1]);
+        }
 
-        return jso.toString();
+        if (!isEmpty(data[2]) && data[2].length() > 15) {
+            throw new InvalidDataValueException(
+                    "invalid MIDDLE_NAME [length <= 15]", data[2]);
+        }
+
+        if (isEmpty(data[3]) || data[3].length() > 15) {
+            throw new InvalidDataValueException(
+                    "invalid LAST_NAME [required, length <= 15]", data[3]);
+        }
+
+        if (isEmpty(data[4]) || !(data[4].length() == 12) || !data[4].matches("\\d{3}-\\d{3}-\\d{4}")) {
+            throw new InvalidDataValueException(
+                    "invalid PHONE_NUM [required, length = 12, format: ###-###-####]", data[4]);
+        }
     }
 }

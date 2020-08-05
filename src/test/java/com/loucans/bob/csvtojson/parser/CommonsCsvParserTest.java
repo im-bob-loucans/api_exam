@@ -1,41 +1,49 @@
 package com.loucans.bob.csvtojson.parser;
 
 import com.loucans.bob.csvtojson.model.CsvRow;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
 import static java.lang.String.format;
+import static java.util.Objects.nonNull;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
-public class CommonsCsvRfc4180ProcessorTest {
-
+public class CommonsCsvParserTest {
     private CommonsCsvParser parser;
     private Map<Integer, CsvRow> processedRows;
     private Map<Integer, Exception> errors;
-
-    private CsvRowCallbackHandler rowCallbackHandler;
-    private CsvRowCallbackErrorHandler rowCallbackErrorHandler;
+    private CsvRowCallbackHandler rowHandler;
+    private CsvRowCallbackErrorHandler errorHandler;
 
     @Before
     public void setup() {
-        parser = new CommonsCsvParser();
         processedRows = new HashMap<>();
         errors = new HashMap<>();
-        rowCallbackHandler = (rowNum, csvRow) -> processedRows.put(rowNum, csvRow);
-        rowCallbackErrorHandler = (rowNum, error) -> errors.put(rowNum, error);
+        rowHandler = (rowNum, csvRow) -> processedRows.put(rowNum, csvRow);
+        errorHandler = (rowNum, error) -> errors.put(rowNum, error);
+    }
+
+    @After
+    public void teardown() throws IOException {
+        if (nonNull(parser)) {
+            parser.close();
+        }
     }
 
     @Test
     public void parse_shouldProduceRows_whenFileIsWellFormed() {
-        parser.parse(
-                csvFile("happy_path"), rowCallbackHandler, rowCallbackErrorHandler);
+        parser = new CommonsCsvParser(csvFile("happy_path"));
+
+        parser.parse(rowHandler, errorHandler);
 
         assertEquals(2, processedRows.size());
         assertHeader(processedRows.get(1).getRowData());
@@ -48,8 +56,9 @@ public class CommonsCsvRfc4180ProcessorTest {
 
     @Test
     public void parse_shouldProduceRows_whenFileContainsOnlyHeaders() {
-        parser.parse(
-                csvFile("headers_only"), rowCallbackHandler, rowCallbackErrorHandler);
+        parser = new CommonsCsvParser(csvFile("headers_only"));
+
+        parser.parse(rowHandler, errorHandler);
 
         assertEquals(1, processedRows.size());
         assertHeader(processedRows.get(1).getRowData());
@@ -58,8 +67,9 @@ public class CommonsCsvRfc4180ProcessorTest {
 
     @Test
     public void parse_shouldProduceRows_whenRowIsMissingSomeData() {
-        parser.parse(
-                csvFile("row_missing_data"), rowCallbackHandler, rowCallbackErrorHandler);
+        parser = new CommonsCsvParser(csvFile("row_missing_data"));
+
+        parser.parse(rowHandler, errorHandler);
 
         assertEquals(2, processedRows.size());
         assertHeader(processedRows.get(1).getRowData());
@@ -70,8 +80,9 @@ public class CommonsCsvRfc4180ProcessorTest {
 
     @Test
     public void parse_shouldProduceErrors_whenCsvHasMalformedQuotedData() {
-        parser.parse(
-                csvFile("malformed_quoted_value"), rowCallbackHandler, rowCallbackErrorHandler);
+        parser = new CommonsCsvParser(csvFile("malformed_quoted_value"));
+
+        parser.parse(rowHandler, errorHandler);
 
         assertEquals(1, processedRows.size());
         assertHeader(processedRows.get(1).getRowData());
@@ -81,8 +92,9 @@ public class CommonsCsvRfc4180ProcessorTest {
 
     @Test
     public void parse_shouldProduceNothing_whenFileIsEmpty() {
-        parser.parse(
-                csvFile("empty_file"), rowCallbackHandler, rowCallbackErrorHandler);
+        parser = new CommonsCsvParser(csvFile("empty_file"));
+
+        parser.parse(rowHandler, errorHandler);
 
         assertEquals(0, processedRows.size());
         assertEquals(0, errors.size());

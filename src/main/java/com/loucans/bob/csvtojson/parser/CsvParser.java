@@ -1,9 +1,8 @@
 package com.loucans.bob.csvtojson.parser;
 
-import java.io.File;
+import java.io.Closeable;
 
-public interface CsvParser {
-    void parse(File fileReader,
-               CsvRowCallbackHandler rowCallbackHandler,
+public interface CsvParser extends Closeable {
+    void parse(CsvRowCallbackHandler rowCallbackHandler,
                CsvRowCallbackErrorHandler rowCallbackErrorHandler);
 }
