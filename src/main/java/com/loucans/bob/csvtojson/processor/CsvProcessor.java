@@ -100,10 +100,10 @@ public class CsvProcessor {
                 new File(inputPath + "/" + csvFileName);
 
         Path outputFile =
-                Paths.get(outputPath + "/" + csvFileName.replace(".csv", ".json"));
+                Paths.get(
+                        outputPath + "/" + StringUtils.stripEnd(csvFileName, ".csv") + ".json");
         try {
             Files.deleteIfExists(outputFile);
-            Files.createFile(outputFile);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -117,27 +117,46 @@ public class CsvProcessor {
         // FLUP - in the event of name collision, the latest file should overwrite the earlier version.
         //   - collect errors
         Path errorFile =
-                Paths.get(errorPath + "/" + csvFileName.replace(".csv", "errors.csv"));
+                Paths.get(errorPath + "/" + csvFileName);
         try {
             Files.deleteIfExists(errorFile);
-            Files.createFile(errorFile);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
         processCsvFile(csvFile,
-                (rowJson) -> {
-                    try {
-                        Files.writeString(outputFile, rowJson, UTF_8, APPEND);
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
+                new OutputWriter() {
+                    private boolean fileCreated = false;
+
+                    @Override
+                    public void writeString(String rowJson) {
+                        try {
+                            if (!fileCreated) {
+                                Files.createFile(outputFile);
+                                fileCreated = true;
+                            }
+                            Files.writeString(outputFile, rowJson, UTF_8, APPEND);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
                     }
                 },
-                (errorMessage) -> {
-                    try {
-                        Files.writeString(errorFile, errorMessage, UTF_8, APPEND);
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
+                new ErrorLogger() {
+                    private boolean fileCreated = false;
+
+                    @Override
+                    public void logError(Integer rowNum, String errorMessage) {
+                        try {
+                            if (!fileCreated) {
+                                Files.createFile(errorFile);
+                                Files.writeString(
+                                        errorFile, "\"LINE_NUM\",\"ERROR_MSG\"\r\n", UTF_8, APPEND);
+                                fileCreated = true;
+                            }
+                            Files.writeString(errorFile, format("\"%d\",\"%s\"\r\n", rowNum, errorMessage), UTF_8, APPEND);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
                     }
                 });
     }
@@ -170,15 +189,13 @@ public class CsvProcessor {
             }
         };
 
-        erroLogger.logError("LINE_NUM,ERROR_MSG" + lineSeparator());
         CsvRowCallbackErrorHandler errorHandler = (rowNum, error) -> {
             String message = format(
                     "csv row failed: value: [%s], error: [%s]", error.getValue(), error.getMessage());
+            LOGGER.error(message);
 
             erroLogger.logError(
-                    format("\"%d\",\"%s\"", rowNum, message.replace("\"", "\"\"")) + lineSeparator());
-
-            LOGGER.error(message);
+                    rowNum, error.getMessage().replace("\"", "\"\""));
 
             // FLUP - processing should continue in the event of an invalid row;
             //         all errors should be collected and added to the corresponding error csv.
@@ -193,8 +210,7 @@ public class CsvProcessor {
                 .parse(csvFile, rowHandler, errorHandler);
 
         if (headerValid == false) {
-            erroLogger.logError(
-                    format("\"%d\",\"empty file\"", 0));
+            erroLogger.logError(0, "\"empty file\"");
         }
 
         if (jsonRow.size() > 0 && StringUtils.isNotEmpty(jsonRow.get(0))) {
@@ -204,7 +220,7 @@ public class CsvProcessor {
 
         if (rowsProcessed > 0) {
             outputFile.writeString("]");
-        } else {
+        } else if (rowsProcessed == 0 && headerValid) {
             outputFile.writeString("[]");
         }
 

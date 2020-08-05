@@ -62,12 +62,22 @@ Current working assumptions to be able to make progress:
 14. Security considerations will be discussed later
      - Files contain PII, logs also
       - Moving of files possible over network
-15. files could be big enough to warrant a complex row by row processing approach
+15. Files could be big enough to warrant a row by row processing approach that complicates building a json array
 16. Logging to std out is ok
 17. No dev norms for the repo - commit templates, code style, coverage, etc….
 18. Input location exist prior to running
 19. Users have backups of their source files
 20. Users will enter different locations - error and input folders cause a loop
-
+21. My error messages are human readable
+22. Empty files produce empty file containing json array
+23. ,, no value provided means null not empty string ""
+24. , , (empty string) means a value is provided
+25. error file encoded as utf-8 with crlf line terminators
+26. LINE_NUM starts with 1 which is the header row
+27. Errors during processing will leave partial files that user has to cleanup
+28. User must do something to a failed file to re-trigger processing
+29. What does this mean? "files will be considered new if the file name has not been recorded as processed before"
+  - if the system deletes the file and the user wants to do it again what do they do?
+  - there is no retry process
 
 
