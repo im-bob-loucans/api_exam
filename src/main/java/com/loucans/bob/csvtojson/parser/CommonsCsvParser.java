@@ -27,39 +27,38 @@ public class CommonsCsvParser implements CsvParser {
                       CsvRowCallbackErrorHandler rowCallbackErrorHandler) {
 
         // FLUP - how to handle source file encoding
-        try (FileReader fileReader = new FileReader(csvFile, UTF_8)) {
+        // FLUP - using the standard CSV parser,  what should it be?
+        try (FileReader fileReader = new FileReader(csvFile, UTF_8);
+             CSVParser parser = CSVFormat.RFC4180.parse(fileReader)) {
 
-            // FLUP - using the standard CSV parser,  what should it be?
-            try (CSVParser parser = CSVFormat.RFC4180.parse(fileReader)) {
-                int rowNum = 1;
-                try {
-                    for (CSVRecord record : parser) {
-                        if (nonNull(record) && (nonNull(rowCallbackHandler))) {
-                            List<String> rowData = new ArrayList<>();
-                            for (String s : record) {
-                                rowData.add(s);
-                            }
-
-                            try {
-                                rowCallbackHandler.handleRow(
-                                        rowNum,
-                                        new CsvRow(rowData.toArray(new String[]{})));
-                            } catch (CsvToJsonException e) {
-                                rowCallbackErrorHandler.handleError(rowNum, e);
-                            }
+            int rowNum = 1;
+            try {
+                for (CSVRecord record : parser) {
+                    if (nonNull(record) && (nonNull(rowCallbackHandler))) {
+                        List<String> rowData = new ArrayList<>();
+                        for (String s : record) {
+                            rowData.add(s);
                         }
-                        rowNum++;
+
+                        try {
+                            rowCallbackHandler.handleRow(
+                                    rowNum,
+                                    new CsvRow(rowData.toArray(new String[]{})));
+                        } catch (CsvToJsonException e) {
+                            rowCallbackErrorHandler.handleError(rowNum, e);
+                        }
                     }
-                } catch (IllegalStateException e) {
-                    // commons-csv can throw row related errors while processing on hasNext
-                    // this catches those conditions and reports them as line errors.
-                    // processing will stop at this point and this will be the last reported error
-                    String message =
-                            isBlank(e.getMessage())
-                                    ? "unknown error processing csv file"
-                                    : e.getMessage().replace("IOException reading next record: java.io.IOException: ", "");
-                    rowCallbackErrorHandler.handleError(rowNum, new InvalidDataRowException(message, null));
+                    rowNum++;
                 }
+            } catch (IllegalStateException e) {
+                // commons-csv can throw row related errors while processing on hasNext
+                // this catches those conditions and reports them as line errors.
+                // processing will stop at this point and this will be the last reported error
+                String message =
+                        isBlank(e.getMessage())
+                                ? "unknown error processing csv file"
+                                : e.getMessage().replace("IOException reading next record: java.io.IOException: ", "");
+                rowCallbackErrorHandler.handleError(rowNum, new InvalidDataRowException(message, null));
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
